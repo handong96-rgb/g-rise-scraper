@@ -32,10 +32,6 @@ jobs:
         run: |
           python prestige_scraper.py
 
-      # 💡 워크넷 파일명에 맞게 아래 주석(#)을 지우고 사용하시면 됩니다.
-      - name: 3. 워크넷 강소기업 수집
-        run: |
-          python worknet_turbo_scraper.py
 
       - name: 변경된 데이터(모든 CSV)를 GitHub에 저장
         run: |
