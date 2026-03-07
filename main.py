@@ -121,7 +121,7 @@ if __name__ == "__main__":
         df = df.drop_duplicates(subset=['기업명', '주소'], keep='first')
         print(f"\n[안내] 수집된 {initial_count}건 중 중복을 제거하여 실제 {len(df)}개의 유니크한 데이터가 남았습니다.")
         
-        file_name = "G_RISE_가족회사.csv"
+        file_name = "G_RISE_familycompany.csv"
         df.to_csv(file_name, index=False, encoding="utf-8-sig")
         print(f"===== 🎉 수집 완료! =====")
         print(f"저장된 파일: {file_name}")
