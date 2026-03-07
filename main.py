@@ -3,56 +3,65 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import urllib3
 import time
+import base64
+import urllib.parse
 
 # 공공기관 사이트 SSL 경고 숨기기
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+def get_encoded_q(page):
+    """페이지 번호를 G-RISE 사이트 전용 암호(Base64)로 변환합니다."""
+    # 1. 원래 형태의 문자열 생성
+    raw_str = f"act=List&PageNum={page}"
+    # 2. URL 인코딩 (act%3DList%26PageNum%3D...)
+    url_encoded = urllib.parse.quote(raw_str)
+    # 3. Base64 인코딩
+    b64_encoded = base64.b64encode(url_encoded.encode('utf-8')).decode('utf-8')
+    return b64_encoded
 
 def get_total_pages(url, headers):
     """1페이지에 접속하여 전체 페이지 수를 파악합니다."""
     try:
         response = requests.get(url, headers=headers, verify=False)
-        response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # 'PAGE : 1 / 21' 텍스트가 있는 부분에서 '21'을 찾아냅니다.
         page_info = soup.select_one('span.page > span')
-        
         if page_info:
-            # 텍스트에서 공백 등을 제거하고 숫자만 추출
-            total_pages = int(page_info.get_text(strip=True))
-            return total_pages
-        else:
-            print("전체 페이지 수를 찾을 수 없어 기본값(21)으로 설정합니다.")
-            return 21 # 만약 못 찾으면 안전하게 21로 설정
-            
+            return int(page_info.get_text(strip=True))
     except Exception as e:
         print(f"전체 페이지 수 확인 중 오류 발생: {e}")
-        return 21
+    return 21
 
-def scrape_g_rise_smart():
+def scrape_g_rise_family_final():
     final_results = []
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.g-riseon.or.kr/181/FamilyList.do"
     }
 
-    base_url = "https://www.g-riseon.or.kr/181/FamilyList.do?pageIndex=1"
+    base_url = "https://www.g-riseon.or.kr/181/FamilyList.do"
     
-    # 1. 먼저 전체 페이지 수를 알아냅니다.
-    print("전체 페이지 수를 확인 중입니다...")
-    total_pages = get_total_pages(base_url, headers)
-    print(f"확인 완료! 총 {total_pages}페이지를 수집합니다.\n")
+    print("1. 전체 페이지 수 파악 중...")
+    # 1페이지용 암호를 만들어 접속
+    first_page_url = f"{base_url}?q={get_encoded_q(1)}"
+    total_pages = get_total_pages(first_page_url, headers)
+    print(f" -> 총 {total_pages}페이지 확인 완료!\n")
     
-    # 2. 파악한 전체 페이지 수만큼만 반복합니다.
     for page in range(1, total_pages + 1):
         print(f"[{page}/{total_pages}] 페이지 수집 중...")
-        url = f"https://www.g-riseon.or.kr/181/FamilyList.do?pageIndex={page}"
+        
+        # 💡 [핵심 해결] 각 페이지 번호에 맞는 암호(Base64)를 생성하여 주소에 붙입니다.
+        target_url = f"{base_url}?q={get_encoded_q(page)}"
         
         try:
-            response = requests.get(url, headers=headers, verify=False)
+            # 안전한 GET 방식으로 요청
+            response = requests.get(target_url, headers=headers, verify=False)
             response.raise_for_status()
+            response.encoding = 'utf-8'
+            
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # 모든 기업 항목(<li> 태그)을 찾습니다.
             company_items = soup.select('div.familyDB > ul.list > li')
             
             if not company_items:
@@ -62,15 +71,12 @@ def scrape_g_rise_smart():
             for item in company_items:
                 data = {}
                 
-                # 기업명 추출
                 name_tag = item.select_one('p.name')
                 data['기업명'] = name_tag.get_text(strip=True) if name_tag else ""
                 
-                # 대학명 추출
                 univ_tag = item.select_one('div.cate-wrap span.univ')
                 data['대학명'] = univ_tag.get_text(strip=True) if univ_tag else ""
                 
-                # 외부 노출 정보 (산업분류, 업종업태) 추출
                 etc_items = item.select('ul.etc > li')
                 for etc in etc_items:
                     strong_text = etc.find('strong').get_text(strip=True) if etc.find('strong') else ""
@@ -79,7 +85,6 @@ def scrape_g_rise_smart():
                     if '산업분류' in strong_text: data['산업분류'] = p_text
                     elif '업종업태' in strong_text: data['업종업태'] = p_text
 
-                # 모바일용 숨김 박스 내 상세 정보 추출
                 detail_dls = item.select('div.family-detail-list > dl')
                 for dl in detail_dls:
                     dt_text = dl.find('dt').get_text(strip=True) if dl.find('dt') else ""
@@ -90,7 +95,7 @@ def scrape_g_rise_smart():
                     elif '주소' in dt_text: data['주소'] = dd_text
 
                 final_results.append(data)
-                
+            
             time.sleep(1) # 서버 보호를 위한 1초 휴식
 
         except Exception as e:
@@ -99,9 +104,8 @@ def scrape_g_rise_smart():
 
     return final_results
 
-# 실행부
 if __name__ == "__main__":
-    data = scrape_g_rise_smart()
+    data = scrape_g_rise_family_final()
     
     df = pd.DataFrame(data)
     
@@ -112,11 +116,14 @@ if __name__ == "__main__":
     df = df[columns_order]
 
     if not df.empty:
-        # 깃허브 자동화를 위해 엑셀이 아닌 CSV로 저장! 한글 깨짐 방지 인코딩 적용
-        file_name = "G_RISE_기업목록.csv"
+        # 이중 방어막: 이름과 주소가 같으면 중복 제거
+        initial_count = len(df)
+        df = df.drop_duplicates(subset=['기업명', '주소'], keep='first')
+        print(f"\n[안내] 수집된 {initial_count}건 중 중복을 제거하여 실제 {len(df)}개의 유니크한 데이터가 남았습니다.")
+        
+        file_name = "G_RISE_가족회사.csv"
         df.to_csv(file_name, index=False, encoding="utf-8-sig")
-        print(f"\n===== 🎉 수집 완료! =====")
-        print(f"총 {len(df)}개의 기업 정보를 깃허브에 저장했습니다.")
+        print(f"===== 🎉 수집 완료! =====")
         print(f"저장된 파일: {file_name}")
     else:
         print("\n수집된 데이터가 없습니다.")
