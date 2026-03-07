@@ -32,10 +32,19 @@ jobs:
         run: |
           python prestige_scraper.py
 
+      # 💡 워크넷 파일명에 맞게 아래 주석(#)을 지우고 사용하시면 됩니다.
+      - name: 3. 워크넷 강소기업 수집
+        run: |
+          python worknet_turbo_scraper.py
+
       - name: 변경된 데이터(모든 CSV)를 GitHub에 저장
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 💡 [핵심 해결] 에러 방지: 덮어쓰기 전에 깃허브의 최신 상태를 먼저 가져와서 충돌을 막습니다.
+          git pull --rebase origin main 
+          
           git add *.csv # 생성된 모든 csv 파일을 한 번에 추가
           git commit -m "Auto-update all data KST Midnight" || echo "No changes to commit"
           git push
