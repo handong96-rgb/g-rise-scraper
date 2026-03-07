@@ -125,7 +125,7 @@ if __name__ == "__main__":
     df = pd.DataFrame(results)
     
     if not df.empty:
-        file_name = "명품강소기업_통합_스마트.csv"
+        file_name = "prestigecompany.csv"
         df.to_csv(file_name, index=False, encoding="utf-8-sig")
         print(f"\n===== 🎉 수집 완료! =====")
         print(f"총 {len(df)}개의 기업 정보를 '{file_name}'로 저장했습니다.")
